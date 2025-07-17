@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flug Tracker</title>
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#007bff">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f4f4f4;
+      padding: 2em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    form {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1em;
+    }
+    input[type="url"] {
+      width: 60%;
+      padding: 0.5em;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    button {
+      margin-left: 1em;
+      padding: 0.5em 1em;
+      border: none;
+      border-radius: 6px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+      margin-top: 1em;
+    }
+    .content-wrapper {
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      gap: 2em;
+      width: 100%;
+      max-width: 1200px;
+    }
+    .status, .events, .map-box, .time-box {
+      background: #fff;
+      padding: 1em;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+      min-height: 200px;
+    }
+    .status {
+      flex: 2.5;
+      background: #e9f5ff;
+      border-left: 4px solid #007bff;
+      font-weight: bold;
+    }
+    .events {
+      flex: 2.5;
+    }
+    .flight-entry {
+      margin-bottom: 0.4em;
+      line-height: 1.2;
+      font-size: 0.95em;
+    }
+    .map-box, .time-box {
+      flex: 1;
+      text-align: center;
+    }
+    .extra-margin {
+      margin-top: 2em;
+    }
+    .arrow-icon {
+  opacity: 0.8;
+  pointer-events: none;
+    }
+    canvas {
+      display: block;
+      margin: 0.5em auto;
+    }
+    
+    /* Layout Umbau */ 
+  @media (max-width: 768px) {
+  .content-wrapper {
+    flex-direction: column;
+    gap: 1em;
+    padding: 0 1em;
+  }
+
+  form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  input[type="url"] {
+    width: 100%;
+  }
+
+  button {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 0.5em;
+  }
+
+  #clockBox {
+    flex-direction: column !important;
+    gap: 1em;
+  }
+
+  #calendarPopup {
+    width: 90vw !important;
+    left: 5vw !important;
+    transform: none !important;
+  }
+  }
+    /* Schriftgrösse und Touch */
+    @media (max-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+
+  h1 {
+    font-size: 1.5em;
+    text-align: center;
+  }
+
+  input[type="url"],
+  button,
+  select {
+    font-size: 1em;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .flight-entry {
+    font-size: 1em;
+  }
+
+  .status,
+  .events,
+  .map-box,
+  .time-box {
+    font-size: 1em;
+    padding: 1em;
+  }
+
+  .map-box,
+  .time-box {
+    margin-bottom: 1em;
+  }
+}
+@media (max-width: 768px) {
+  /* Verhindert horizontales Scrollen */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Kalender-Popup fullscreen-artig zentriert */
+  #calendarPopup {
+    top: 5vh !important;
+    left: 5vw !important;
+    width: 90vw !important;
+    max-height: 90vh;
+    overflow-y: auto;
+    transform: none !important;
+    box-sizing: border-box;
+  }
+
+  #calendarGrid {
+    font-size: 1em;
+  }
+
+  #calendarPopup h4 {
+    font-size: 1.1em;
+  }
+
+  #calendarPopup button {
+    font-size: 1.1em;
+  }
+}
+
+</style>
+</head>
+<body>
+  <h1>Flug Tracker</h1>
+  <form id="importForm">
+    <input type="url" id="calendarURL" placeholder=".ics Kalender-URL eingeben" required />
+    <button type="submit">📥 Importieren</button>
+  </form>
+
+  <!--
+<div style="margin-top: 1em; display: flex; gap: 1em; align-items: center;">
+  <select id="demoSelect">
+    <option value="">— Demo auswählen —</option>
+    <option value="inFlight">🛫 Demo: Im Flug</option>
+    <option value="athensStay">🏛️ Demo: Aufenthalt in Athen</option>
+  </select>
+  <button id="demoButton" type="button">🎬 Demomodus</button>
+</div>
+  -->
+  
+  <div id="errorDisplay" class="error"></div>
+  <div class="content-wrapper">
+    <div id="statusDisplay" class="status">📍 Status erscheint hier</div>
+    <div id="eventList" class="events">🗓️ Ereignisse erscheinen hier</div>
+  </div>
+  <div class="content-wrapper extra-margin">
+    <div id="map" class="map-box">🗺️ Karte wird geladen...</div>
+  
+   <div id="clockBox" class="time-box" style="display: flex; justify-content: space-around;">
+  <div style="text-align: center;">
+    <h4>Schweiz</h4>
+    <svg id="chClock" width="100" height="100"></svg>
+    <div id="chTime">--:--</div>
+  </div>
+  <div style="text-align: center;">
+    <h4>UTC</h4>
+    <svg id="utcClock" width="100" height="100"></svg>
+    <div id="utcTime">--:--</div>
+  </div>
+  <div style="text-align: center;">
+    <h4 id="localLabel">Lokal</h4>
+    <svg id="localClock" width="100" height="100"></svg>
+    <div id="localTime">--:--</div>
+  </div>
+</div>
+
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+  const DEMOS = {
+  inFlight: (() => {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const iso = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+    const add = (min) => new Date(now.getTime() + min * 60000);
+    const ev = (sum, startMin, endMin) => `BEGIN:VEVENT
+SUMMARY:${sum}
+DTSTART:${iso(add(startMin))}
+DTEND:${iso(add(endMin))}
+END:VEVENT`;
+    return `BEGIN:VCALENDAR
+${[
+      ev("LX1842 ZRH 1400 ATH 1800", -30, 90),
+      ev("LX9999 ATH 0900 MUC 1000", 2880, 2940),
+      ev("LX8888 MUC 1100 FRA 1200", 3000, 3060),
+      ev("LX7777 FRA 1500 ZRH 1600", 3120, 3180)
+    ].join('\n')}
+END:VCALENDAR`;
+  })(),
+
+  athensStay: (() => {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const iso = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+    const dateOnly = (d) => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+    const add = (min) => new Date(now.getTime() + min * 60000);
+    const addDays = (d) => new Date(now.getTime() + d * 86400000);
+    const ev = (sum, startMin, endMin) => `BEGIN:VEVENT
+SUMMARY:${sum}
+DTSTART:${iso(add(startMin))}
+DTEND:${iso(add(endMin))}
+END:VEVENT`;
+    const allDay = (sum, startDay, endDay) => `BEGIN:VEVENT
+SUMMARY:${sum}
+DTSTART;VALUE=DATE:${dateOnly(addDays(startDay))}
+DTEND;VALUE=DATE:${dateOnly(addDays(endDay))}
+END:VEVENT`;
+    return `BEGIN:VCALENDAR
+${[
+      ev("LX5678 ZRH 0900 ATH 1300", -1440, -1380),
+      allDay("HOTEL ATHEN STAY", 0, 2),
+      ev("LX9990 ATH 0900 ZRH 1100", 2880, 2940),
+      ev("LX9991 ZRH 1300 LHR 1430", 4320, 4410),
+      ev("SIM Training", 5760, 5880)
+    ].join('\n')}
+END:VCALENDAR`;
+  })()
+};
+
+  /*
+  document.getElementById("demoButton").addEventListener("click", async () => {
+    const selected = document.getElementById("demoSelect").value;
+    if (!selected || !DEMOS[selected]) return;
+    const text = DEMOS[selected];
+    const events = parseICS(text);
+    const futureEvents = events.filter(e => e.start > new Date());
+    window.events = events;
+    displayEvents(futureEvents);
+    await updateStatus(events);
+    console.log("🎬 Demodaten geladen:", selected);
+  });
+*/
+  async function fetchCalendar(url) {
+      const res = await fetch(`https://flug-proxy-server.onrender.com/proxy?url=${encodeURIComponent(url)}`);
+      if (!res.ok) throw new Error(`Fehler: ${res.status}`);
+      return await res.text();
+    }
+function parseICalDate(str) {
+  if (!str) return null;
+
+  // Format: 20250703T064000Z → ISO-konform UTC
+  if (/^\d{8}T\d{6}Z$/.test(str)) {
+    const [_, y, m, d, h, min, s] = str.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+return new Date(Date.UTC(+y, +m - 1, +d, +h, +min, +s));
+
+  }
+
+  // Format: 20250703T064000 → lokal interpretieren
+  if (/^\d{8}T\d{6}$/.test(str)) {
+    const parts = str.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
+    if (parts) {
+      const [, y, m, d, h, min, s] = parts;
+      return new Date(`${y}-${m}-${d}T${h}:${min}:${s}`);
+    }
+  }
+
+  // Format: 20250703 (ganztägig)
+  if (/^\d{8}$/.test(str)) {
+    const parts = str.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (parts) {
+      const [, y, m, d] = parts;
+      return new Date(`${y}-${m}-${d}T00:00:00`);
+    }
+  }
+
+  return null;
+}
+
+function parseICS(text) {
+  const events = [];
+  const entries = text.split('BEGIN:VEVENT').slice(1);
+  for (const entry of entries) {
+   const summaryMatch = entry.match(/SUMMARY[^:]*:([^\r\n]+)/);
+    const summary = summaryMatch ? summaryMatch[1].trim() : null;
+    const startRaw = (entry.match(/DTSTART(?:;[^:]+)?:([^\r\n]+)/) || [])[1];
+    const endRaw = (entry.match(/DTEND(?:;[^:]+)?:([^\r\n]+)/) || [])[1];
+    const start = parseICalDate(startRaw);
+    const end = parseICalDate(endRaw);
+    console.log("Eingelesener Event:", summary, startRaw);
+    if (summary && start instanceof Date && !isNaN(start.getTime())) {
+      events.push({ summary, start, end });
+    }
+  }
+  events.sort((a, b) => a.start - b.start);
+  return events;
+}
+
+
+   async function displayEvents(events) {
+  const list = document.getElementById("eventList");
+  list.innerHTML = "";
+
+  let airportData = null;
+  async function getCity(iata) {
+    if (!airportData) {
+      const proxy = "https://flug-proxy-server.onrender.com/proxy?url=";
+      const url = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat";
+      const res = await fetch(`${proxy}${encodeURIComponent(url)}`);
+      const text = await res.text();
+      airportData = new Map(
+        text.split("\n").map(line => {
+          const f = line.split(',');
+          return [f[4]?.replaceAll('"',''), f[2]?.replaceAll('"','')];
+        })
+      );
+    }
+    return airportData.get(iata) || iata;
+  }
+
+  for (const event of events.slice(0, 10)) {
+   const date = event.start.toLocaleDateString("de-CH", { day: '2-digit', month: '2-digit' });
+    const div = document.createElement("div");
+    div.className = "flight-entry";
+
+    const match = event.summary.match(/(LX\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/)
+    console.log("⚙️ REGEX-Test:", event.summary, "→", !!match);
+    if (match) {
+      const flight = match[0];
+      const from = await getCity(match[2]);
+      const to = await getCity(match[4]);
+      div.textContent = `✈️ ${date} – ${from} → ${to} (${match[3]}–${match[5]})`;
+    } else {
+      let icon = "📌";
+      if (/SBY/i.test(event.summary)) icon = "🛑";
+      if (/RESX/i.test(event.summary)) icon = "🛏️";
+      if (/HOTEL/i.test(event.summary)) icon = "🏨";
+      if (/SIM/i.test(event.summary)) icon = "🎓";
+      div.innerHTML = `${icon} <strong>${date}</strong> – ${event.summary}`;
+    }
+
+    list.appendChild(div);
+  }
+}
+
+
+function mapCityToTimeZone(city) {
+  const url = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(city);
+  return fetch(url)
+    .then(res => res.json())
+    .then(data => {
+      if (!data.length) throw new Error("Keine Geodaten gefunden für " + city);
+      const lat = data[0].lat;
+      const lon = data[0].lon;
+      const tzUrl = `https://api.timezonedb.com/v2.1/get-time-zone?key=TIURO99O0CI5&format=json&by=position&lat=${lat}&lng=${lon}`;
+      return fetch(tzUrl)
+        .then(r => r.json())
+        .then(j => j.zoneName || "Europe/Zurich");
+    })
+    .catch(() => Promise.resolve("Europe/Zurich"));
+}
+
+
+
+async function updateStatus(events) {
+  const status = document.getElementById("statusDisplay");
+  const now = new Date();
+
+  let airportData = null;
+  async function getCity(iata) {
+    if (!airportData) {
+      const proxy = "https://flug-proxy-server.onrender.com/proxy?url=";
+      const url = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat";
+      const res = await fetch(`${proxy}${encodeURIComponent(url)}`);
+      const text = await res.text();
+      airportData = new Map(
+        text.split("\n").map(line => {
+          const f = line.split(',');
+          return [f[4]?.replaceAll('"',''), f[2]?.replaceAll('"','')];
+        })
+      );
+    }
+    return airportData.get(iata) || iata;
+  }
+
+  const parsed = events.map(ev => {
+    const match = ev.summary.match(/(LX\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
+    if (!match) return null;
+    const start = ev.start;
+    const end = ev.end || new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    return {
+      flight: match[0],
+      from: match[2],
+      dep: match[2],
+      to: match[4],
+      arr: match[4],
+      start,
+      end
+    };
+  }).filter(Boolean);
+
+  const current = parsed.find(e => now >= e.start && now <= e.end);
+  const next = parsed.find(e => e.start > now);
+  const last = [...parsed].reverse().find(e => e.end < now);
+
+  if (current) {
+  const from = await getCity(current.from);
+  const to = await getCity(current.to);
+
+  const durationMin = Math.round((current.end - current.start) / 60000);
+  const elapsedMin = Math.round((now - current.start) / 60000);
+  const remainingMin = durationMin - elapsedMin;
+
+  status.innerHTML = `🛫 Aktuell im Flug: <strong>${from} → ${to}</strong><br>` ;
+  showFlightRoute(current.from, current.to);
+                   
+  const flightCode = current.flight.match(/^LX\d+/)?.[0] || '';
+if (flightCode) {
+  const flightradarURL = `https://www.flightradar24.com/${flightCode}`;
+  status.innerHTML += `<br>🔗 <a href="${flightradarURL}" target="_blank">Flug live auf Flightradar24 ansehen</a>`;
+}
+
+}
+
+  else if (last && next) {
+    const isHome = last.to === "ZRH";
+    const from = await getCity(next.from);
+    const to = await getCity(next.to);
+    const loc = isHome ? "🏠 Zuhause" : await getCity(last.to);
+    mapCityToTimeZone(loc).then(tz => {
+      window.localTimeZone = tz;
+      updateClocks();
+
+    // 🔁 automatische Aktualisierung des Kalenders alle 10 Minuten
+    });
+    
+    showFlightRoute(next.from, next.to);
+document.getElementById("localLabel").textContent = loc;
+updateClocks();
+status.innerHTML = `📍 Standort: <strong>${loc}</strong><br><br>` +
+                       `✈️ <strong>Nächster Flug:</strong> ${from} → ${to}`;
+  } else if (last) {
+    const to = await getCity(last.to);
+    status.innerHTML = `📍 Letzter bekannter Standort: <strong>${to}</strong>`;
+  } else if (next) {
+    const from = await getCity(next.from);
+    const to = await getCity(next.to);
+    status.innerHTML = `✈️ <strong>Nächster Flug:</strong> ${from} ${next.dep} → ${to} ${next.arr}`;
+  } else {
+    status.innerHTML = "📍 Keine Flugdaten gefunden.";
+  }
+}
+
+
+
+    document.getElementById("importForm").addEventListener("submit", async (e) => {
+      if (!window.reloadIntervalSet) {
+        setInterval(async () => {
+          if (window.calendarURL) {
+            try {
+              const ics = await fetchCalendar(window.calendarURL);
+              const events = parseICS(ics);
+              const futureEvents = events.filter(e => e.start > new Date());
+              window.events = events;
+              displayEvents(futureEvents);
+              await updateStatus(events);
+              console.log("🔄 Kalender aktualisiert um " + new Date().toLocaleTimeString());
+            } catch (err) {
+              console.warn("Fehler beim automatischen Kalender-Reload:", err.message);
+            }
+          }
+        }, 600000);
+        window.reloadIntervalSet = true;
+      }
+      e.preventDefault();
+      const url = document.getElementById("calendarURL").value;
+      const errorBox = document.getElementById("errorDisplay");
+      errorBox.textContent = "⏳ Kalender wird geladen...";
+      window.calendarURL = url;
+      try {
+  const ics = await fetchCalendar(url);
+  const events = parseICS(ics);
+  const futureEvents = events.filter(e => e.start > new Date());
+  window.events = events;
+  displayEvents(futureEvents);
+  console.log("Alle Event-Starts (ISO):", events.map(e => e.start.toISOString()));
+  console.log("Zukunfts-Flüge:", events.filter(e => e.start > new Date()).map(e => e.summary + " @ " + e.start.toISOString()));
+  await updateStatus(events);
+  errorBox.textContent = "";
+} catch (err) {
+  errorBox.textContent = `❌ Fehler beim Import: ${err.message}`;
+}
+
+    });
+
+   function drawAnalogClock(svgId, time) {
+  const svg = document.getElementById(svgId);
+  svg.innerHTML = '';
+  const NS = "http://www.w3.org/2000/svg";
+
+  const circle = document.createElementNS(NS, "circle");
+  circle.setAttribute("cx", 50);
+  circle.setAttribute("cy", 50);
+  circle.setAttribute("r", 48);
+  circle.setAttribute("stroke", "black");
+  circle.setAttribute("stroke-width", 2);
+  circle.setAttribute("fill", "white");
+  svg.appendChild(circle);
+
+  const hour = time.getHours() % 12;
+  const minute = time.getMinutes();
+  const hourAngle = ((hour + minute / 60) / 12) * 360;
+  const minuteAngle = (minute / 60) * 360;
+
+  const hourHand = document.createElementNS(NS, "line");
+  hourHand.setAttribute("x1", 50);
+  hourHand.setAttribute("y1", 50);
+  hourHand.setAttribute("x2", 50 + 20 * Math.sin(Math.PI * hourAngle / 180));
+  hourHand.setAttribute("y2", 50 - 20 * Math.cos(Math.PI * hourAngle / 180));
+  hourHand.setAttribute("stroke", "black");
+  hourHand.setAttribute("stroke-width", 3);
+  svg.appendChild(hourHand);
+
+  const minuteHand = document.createElementNS(NS, "line");
+  minuteHand.setAttribute("x1", 50);
+  minuteHand.setAttribute("y1", 50);
+  minuteHand.setAttribute("x2", 50 + 30 * Math.sin(Math.PI * minuteAngle / 180));
+  minuteHand.setAttribute("y2", 50 - 30 * Math.cos(Math.PI * minuteAngle / 180));
+  minuteHand.setAttribute("stroke", "black");
+  minuteHand.setAttribute("stroke-width", 2);
+  svg.appendChild(minuteHand);
+
+  const center = document.createElementNS(NS, "circle");
+  center.setAttribute("cx", 50);
+  center.setAttribute("cy", 50);
+  center.setAttribute("r", 2);
+  center.setAttribute("fill", "black");
+  svg.appendChild(center);
+}
+
+
+  function getTimeInZone(tz) {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("de-CH", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(now);
+
+  const hours = +parts.find(p => p.type === "hour").value;
+  const minutes = +parts.find(p => p.type === "minute").value;
+
+  const result = new Date();
+  result.setHours(hours);
+  result.setMinutes(minutes);
+  result.setSeconds(0);
+  result.setMilliseconds(0);
+  return result;
+}
+
+function updateClocks() {
+  const zurich = getTimeInZone("Europe/Zurich");
+  const utc = getTimeInZone("UTC");
+  const localTz = window.localTimeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const local = getTimeInZone(localTz);
+
+  drawAnalogClock("chClock", zurich);
+  drawAnalogClock("utcClock", utc);
+  drawAnalogClock("localClock", local);
+
+  document.getElementById("chTime").textContent = zurich.toTimeString().substring(0,5);
+  document.getElementById("utcTime").textContent = utc.toTimeString().substring(0,5);
+  document.getElementById("localTime").textContent = local.toTimeString().substring(0,5);
+  // Do not overwrite label here – it's already set in updateStatus
+}
+
+
+    setInterval(updateClocks, 60000);
+    updateClocks();
+
+let mapInstance;
+let mapLine;
+let fromMarker;
+let toMarker;
+
+
+async function getAirportCoords(iata) {
+  if (!window.airportCoordsCache) {
+    const proxy = "https://flug-proxy-server.onrender.com/proxy?url=";
+    const url = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat";
+    const res = await fetch(`${proxy}${encodeURIComponent(url)}`);
+    const text = await res.text();
+    window.airportCoordsCache = new Map(
+   text.split("\n").map(line => {
+        const f = line.split(',');
+        return [f[4]?.replaceAll('"',''), [parseFloat(f[6]), parseFloat(f[7])]];
+      })
+    );
+  }
+  return window.airportCoordsCache.get(iata);
+}
+
+  function interpolateCoords(from, to, t) {
+  const lat = from[0] + (to[0] - from[0]) * t;
+  const lng = from[1] + (to[1] - from[1]) * t;
+  return [lat, lng];
+}
+
+function computeBearing(from, to) {
+  const lat1 = from[0] * Math.PI / 180;
+  const lat2 = to[0] * Math.PI / 180;
+  const dLon = (to[1] - from[1]) * Math.PI / 180;
+
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1)*Math.sin(lat2) -
+            Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+  const brng = Math.atan2(y, x) * 180 / Math.PI;
+  return (brng + 360) % 360;
+}
+
+async function showFlightRoute(fromIATA, toIATA) {
+  const fromCoords = await getAirportCoords(fromIATA);
+  const toCoords = await getAirportCoords(toIATA);
+
+  if (fromCoords && toCoords && mapInstance) {
+    // Alte Linien/Marker entfernen
+    if (mapLine) mapInstance.removeLayer(mapLine);
+    if (fromMarker) mapInstance.removeLayer(fromMarker);
+    if (toMarker) mapInstance.removeLayer(toMarker);
+
+    // Linie zeichnen
+    mapLine = L.polyline([fromCoords, toCoords], { color: 'blue', weight: 3 }).addTo(mapInstance);
+
+    // IATA-Code-Marker
+    fromMarker = L.marker(fromCoords).addTo(mapInstance).bindTooltip(fromIATA, { permanent: true, direction: 'right' });
+    toMarker = L.marker(toCoords).addTo(mapInstance).bindTooltip(toIATA, { permanent: true, direction: 'left' });
+    
+    // Karte auf Linie zoomen
+    mapInstance.fitBounds(mapLine.getBounds(), { padding: [30, 30] });
+  }
+}
+
+
+navigator.geolocation?.getCurrentPosition(position => {
+  const { latitude, longitude } = position.coords;
+  mapInstance = L.map('map').setView([latitude, longitude], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(mapInstance);
+}, () => {
+  // Fallback auf Schweiz-Karte, z.B. Bern
+  mapInstance = L.map('map').setView([46.9481, 7.4474], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(mapInstance);
+});
+
+    document.getElementById("eventList").addEventListener("click", openCalendarPopup);
+
+let calendarState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+function openCalendarPopup() {
+  const popup = document.getElementById("calendarPopup");
+  const grid = document.getElementById("calendarGrid");
+  popup.style.display = "block";
+
+
+  renderCalendar(calendarState.year, calendarState.month);
+
+  document.getElementById("prevMonth").onclick = () => {
+    calendarState.month--;
+    if (calendarState.month < 0) {
+      calendarState.month = 11;
+      calendarState.year--;
+    }
+    renderCalendar(calendarState.year, calendarState.month);
+  };
+
+  document.getElementById("nextMonth").onclick = () => {
+    calendarState.month++;
+    if (calendarState.month > 11) {
+      calendarState.month = 0;
+      calendarState.year++;
+    }
+    renderCalendar(calendarState.year, calendarState.month);
+  };
+}
+
+function renderCalendar(year, month) {
+  const title = document.getElementById("calendarTitle");
+  const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+  title.textContent = `📅 ${monthNames[month]} ${year}`;
+  const grid = document.getElementById("calendarGrid");
+  const now = new Date();
+  const today = now.getDate();
+
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0).getDate();
+  const startDay = first.getDay() || 7;
+
+  grid.innerHTML = "";
+
+  for (let i = 1; i < startDay; i++) {
+    const empty = document.createElement("div");
+    grid.appendChild(empty);
+  }
+
+  for (let d = 1; d <= last; d++) {
+    const cell = document.createElement("div");
+    const date = new Date(year, month, d);
+    const sameDay = e => e.start.getDate() === d && e.start.getMonth() === month && e.start.getFullYear() === year;
+    const dayEvents = (window.events || []).filter(sameDay);
+
+    cell.style.padding = "0.5em";
+    cell.style.border = "1px solid #ccc";
+    cell.style.borderRadius = "6px";
+    cell.style.fontSize = "0.85em";
+    cell.style.textAlign = "center";
+    cell.style.cursor = "pointer";
+    cell.style.backgroundColor = (d === today && month === now.getMonth() && year === now.getFullYear()) ? "#ffe5e5" : "#f9f9f9";
+
+    if (dayEvents.length) {
+      const hasFlight = dayEvents.some(e => /LX\d+/.test(e.summary));
+      const hasSpec = dayEvents.some(e => /RESX|SBY|HOTEL/i.test(e.summary));
+      const hasSim = dayEvents.some(e => /SIM/i.test(e.summary));
+      cell.innerHTML = d + (hasFlight ? " ✈️" : "") + (hasSpec ? " 🛏️" : "") + (hasSim ? " 🎓" : "");
+      cell.title = dayEvents.map(e => e.summary).join("\n");
+    } else {
+      cell.textContent = d;
+    }
+
+// Vorschau der Tagesevents unten im Popup
+cell.addEventListener("mouseover", async () => {
+  const preview = document.getElementById("calendarPreview");
+  if (!dayEvents.length) {
+    preview.innerHTML = "<em>Keine Events</em>";
+    return;
+  }
+
+  let airportData = null;
+  async function getCity(iata) {
+    if (!airportData) {
+      const proxy = "https://flug-proxy-server.onrender.com/proxy?url=";
+      const url = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat";
+      const res = await fetch(`${proxy}${encodeURIComponent(url)}`);
+      const text = await res.text();
+      airportData = new Map(
+        text.split("\n").map(line => {
+          const f = line.split(',');
+          return [f[4]?.replaceAll('"',''), f[2]?.replaceAll('"','')];
+        })
+      );
+    }
+    return airportData.get(iata) || iata;
+  }
+
+  const entries = await Promise.all(dayEvents.map(async (e) => {
+    const match = e.summary.match(/(LX\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
+    if (match) {
+      const from = await getCity(match[2]);
+      const to = await getCity(match[4]);
+      return `✈️ <strong>${match[1]}</strong>: ${from} → ${to} (${match[3]}–${match[5]})`;
+    } else {
+      return `• ${e.summary}`;
+    }
+  }));
+
+  preview.innerHTML = entries.join("<br>");
+});
+
+grid.appendChild(cell);
+
+  }
+}
+
+
+  </script>
+
+<div id="calendarPopup" style="display:none; position:fixed; top:100px; left:50%; transform:translateX(-50%); background:white; border:1px solid #ccc; padding:1em; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.1); z-index:1000; min-width:320px;">
+  <button onclick="document.getElementById('calendarPopup').style.display='none'" style="float:right; background:none; border:none; font-size:1.2em; cursor:pointer;">✖️</button>
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+  <button id="prevMonth" style="background:none; border:none; font-size:1.2em; cursor:pointer;">◀️</button>
+  <h4 id="calendarTitle" style="margin: 0;">📅 Monatsübersicht</h4>
+  <button id="nextMonth" style="background:none; border:none; font-size:1.2em; cursor:pointer;">▶️</button>
+</div>
+  <div id="calendarGrid" style="display:grid; grid-template-columns: repeat(7, 1fr); gap:4px;"></div>
+  <div id="calendarPreview" style="margin-top:1em; font-size:0.9em;"></div>
+</div>
+
+
+</body>
+</html>
+
