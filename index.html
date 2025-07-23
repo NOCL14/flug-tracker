@@ -194,11 +194,14 @@
 </head>
 <body>
   <h1>Flug Tracker</h1>
-  <form id="importForm">
-    <input type="url" id="calendarURL" placeholder=".ics Kalender-URL eingeben" required />
-    <button type="submit">📥 Importieren</button>
-  </form>
 
+  <!--
+ <form id="importForm" style="display: none;">
+  <input type="url" id="calendarURL" placeholder=".ics Kalender-URL eingeben" required />
+  <button type="submit">📥 Importieren</button>
+</form>
+-->
+  
   <!--
 <div style="margin-top: 1em; display: flex; gap: 1em; align-items: center;">
   <select id="demoSelect">
@@ -515,7 +518,7 @@ status.innerHTML = `📍 Standort: <strong>${loc}</strong><br><br>` +
 
 
 
-    document.getElementById("importForm").addEventListener("submit", async (e) => {
+   // document.getElementById("importForm").addEventListener("submit", async (e) => {
       if (!window.reloadIntervalSet) {
         setInterval(async () => {
           if (window.calendarURL) {
@@ -539,6 +542,7 @@ status.innerHTML = `📍 Standort: <strong>${loc}</strong><br><br>` +
       const errorBox = document.getElementById("errorDisplay");
       errorBox.textContent = "⏳ Kalender wird geladen...";
       window.calendarURL = url;
+      localStorage.setItem("calendarURL", url);
       try {
   const ics = await fetchCalendar(url);
   const events = parseICS(ics);
@@ -835,6 +839,48 @@ grid.appendChild(cell);
   }
 }
 
+
+ window.addEventListener("DOMContentLoaded", async () => {
+  const savedURL = "https://schedule.swiss.com/1/2/4c80892f-0019-4a25-a0e6-0c25b47cd03d.ics"; // 👈 DEINE URL HIER EINTRAGEN
+
+  if (savedURL) {
+  document.getElementById("calendarURL").value = savedURL;
+  window.calendarURL = savedURL;
+
+  // Trigger automatische Re-Imports alle 10 Minuten
+  if (!window.reloadIntervalSet) {
+    setInterval(async () => {
+      if (window.calendarURL) {
+        try {
+          const ics = await fetchCalendar(window.calendarURL);
+          const events = parseICS(ics);
+          const futureEvents = events.filter(e => e.start > new Date());
+          window.events = events;
+          displayEvents(futureEvents);
+          await updateStatus(events);
+          console.log("🔄 Auto-Reload nach Start");
+        } catch (err) {
+          console.warn("Fehler beim automatischen Reload:", err.message);
+        }
+      }
+    }, 600000);
+    window.reloadIntervalSet = true;
+  }
+
+  try {
+    const ics = await fetchCalendar(savedURL);
+    const events = parseICS(ics);
+    const futureEvents = events.filter(e => e.start > new Date());
+    window.events = events;
+    displayEvents(futureEvents);
+    await updateStatus(events);
+    console.log("✅ Kalender geladen nach Start");
+  } catch (err) {
+    console.warn("Fehler beim Laden gespeicherter URL:", err.message);
+  }
+}
+
+});
 
   </script>
 
