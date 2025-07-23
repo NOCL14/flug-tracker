@@ -488,10 +488,16 @@ if (flightCode) {
 }
 
   else if (last && next) {
-    const isHome = last.to === "ZRH";
-    const from = await getCity(next.from);
-    const to = await getCity(next.to);
-    const loc = isHome ? "🏠 Zuhause" : await getCity(last.to);
+   const sameDayFlights = parsed.filter(e =>
+  e.start.toDateString() === now.toDateString() &&
+  e.start > now
+);
+
+const isHome = last.to === "ZRH" && sameDayFlights.length === 0;
+const from = await getCity(next.from);
+const to = await getCity(next.to);
+const loc = isHome ? "🏠 Zuhause" : await getCity(last.to);
+
     mapCityToTimeZone(loc).then(tz => {
       window.localTimeZone = tz;
       updateClocks();
