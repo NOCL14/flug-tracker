@@ -361,6 +361,12 @@ function parseICS(text) {
   return events;
 }
 
+  function labelEcoflightEvent(summary) {
+  if (/HB-|Noser/.test(summary)) return "🛩️ Flugschule";
+  if (/Theorie/i.test(summary)) return "📘 Theorieunterricht";
+  return null; // ignorieren
+}
+
 
    async function displayEvents(events) {
   const list = document.getElementById("eventList");
@@ -397,10 +403,15 @@ function parseICS(text) {
       div.textContent = `✈️ ${date} – ${from} → ${to} (${match[3]}–${match[5]})`;
     } else {
       let icon = "📌";
-      if (/SBY/i.test(event.summary)) icon = "🛑";
-      if (/RESX/i.test(event.summary)) icon = "🛏️";
-      if (/HOTEL/i.test(event.summary)) icon = "🏨";
-      if (/SIM/i.test(event.summary)) icon = "🎓";
+if (event._ecoflight) {
+  const label = labelEcoflightEvent(event.summary);
+  icon = label?.startsWith("🛩️") ? "🛩️" : label?.startsWith("📘") ? "📘" : "📌";
+} else {
+  if (/SBY/i.test(event.summary)) icon = "🛑";
+  if (/RESX/i.test(event.summary)) icon = "🛏️";
+  if (/HOTEL/i.test(event.summary)) icon = "🏨";
+  if (/SIM/i.test(event.summary)) icon = "🎓";
+}
       div.innerHTML = `${icon} <strong>${date}</strong> – ${event.summary}`;
     }
 
@@ -502,7 +513,6 @@ const loc = isHome ? "🏠 Zuhause" : await getCity(last.to);
       window.localTimeZone = tz;
       updateClocks();
 
-    // 🔁 automatische Aktualisierung des Kalenders alle 10 Minuten
     });
     
     showFlightRoute(next.from, next.to);
@@ -521,50 +531,6 @@ status.innerHTML = `📍 Standort: <strong>${loc}</strong><br><br>` +
     status.innerHTML = "📍 Keine Flugdaten gefunden.";
   }
 }
-
-
-  /*
-    document.getElementById("importForm").addEventListener("submit", async (e) => {
-      if (!window.reloadIntervalSet) {
-        setInterval(async () => {
-          if (window.calendarURL) {
-            try {
-              const ics = await fetchCalendar(window.calendarURL);
-              const events = parseICS(ics);
-              const futureEvents = events.filter(e => e.start > new Date());
-              window.events = events;
-              displayEvents(futureEvents);
-              await updateStatus(events);
-              console.log("🔄 Kalender aktualisiert um " + new Date().toLocaleTimeString());
-            } catch (err) {
-              console.warn("Fehler beim automatischen Kalender-Reload:", err.message);
-            }
-          }
-        }, 600000);
-        window.reloadIntervalSet = true;
-      }
-      e.preventDefault();
-      const url = document.getElementById("calendarURL").value;
-      const errorBox = document.getElementById("errorDisplay");
-      errorBox.textContent = "⏳ Kalender wird geladen...";
-      window.calendarURL = url;
-      localStorage.setItem("calendarURL", url);
-      try {
-  const ics = await fetchCalendar(url);
-  const events = parseICS(ics);
-  const futureEvents = events.filter(e => e.start > new Date());
-  window.events = events;
-  displayEvents(futureEvents);
-  console.log("Alle Event-Starts (ISO):", events.map(e => e.start.toISOString()));
-  console.log("Zukunfts-Flüge:", events.filter(e => e.start > new Date()).map(e => e.summary + " @ " + e.start.toISOString()));
-  await updateStatus(events);
-  errorBox.textContent = "";
-} catch (err) {
-  errorBox.textContent = `❌ Fehler beim Import: ${err.message}`;
-}
-
-    });
-    */
 
    function drawAnalogClock(svgId, time) {
   const svg = document.getElementById(svgId);
@@ -792,13 +758,21 @@ function renderCalendar(year, month) {
     cell.style.cursor = "pointer";
     cell.style.backgroundColor = (d === today && month === now.getMonth() && year === now.getFullYear()) ? "#ffe5e5" : "#f9f9f9";
 
-    if (dayEvents.length) {
-      const hasFlight = dayEvents.some(e => /LX\d+/.test(e.summary));
-      const hasSpec = dayEvents.some(e => /RESX|SBY|HOTEL/i.test(e.summary));
-      const hasSim = dayEvents.some(e => /SIM/i.test(e.summary));
-      cell.innerHTML = d + (hasFlight ? " ✈️" : "") + (hasSpec ? " 🛏️" : "") + (hasSim ? " 🎓" : "");
-      cell.title = dayEvents.map(e => e.summary).join("\n");
-    } else {
+   if (dayEvents.length) {
+  const hasFlight = dayEvents.some(e => /LX\d+/.test(e.summary));
+  const hasSpec = dayEvents.some(e => /RESX|SBY|HOTEL/i.test(e.summary));
+  const hasSim = dayEvents.some(e => /SIM/i.test(e.summary));
+  const hasEcoFlight = dayEvents.some(e => e._ecoflight && /HB-|Noser/.test(e.summary));
+  const hasEcoTheory = dayEvents.some(e => e._ecoflight && /Theorie/i.test(e.summary));
+  cell.innerHTML = d 
+    + (hasFlight ? " ✈️" : "") 
+    + (hasSpec ? " 🛏️" : "") 
+    + (hasSim ? " 🎓" : "")
+    + (hasEcoFlight ? " 🛩️" : "")
+    + (hasEcoTheory ? " 📘" : "");
+  cell.title = dayEvents.map(e => e.summary).join("\n");
+}
+    else {
       cell.textContent = d;
     }
 
@@ -849,6 +823,8 @@ grid.appendChild(cell);
 
  window.addEventListener("DOMContentLoaded", async () => {
   const savedURL = "https://schedule.swiss.com/1/2/4c80892f-0019-4a25-a0e6-0c25b47cd03d.ics"; // 👈 DEINE URL HIER EINTRAGEN
+  const ecoflightURL = "webcal://p104-caldav.icloud.com/published/2/MTk2NzQwNDY1NjE5Njc0MBn6EnSprxbWhjwSNdrA5BfnrCHL2sOzoyLbIQ_oxWKgyZf5zW3wtINcMsWwMuNc8iT-AgZ2zpfJW9HvkdQFjdw";
+
 
   if (savedURL) {
   const input = document.getElementById("calendarURL");
@@ -875,6 +851,22 @@ if (input) input.value = savedURL;
     window.reloadIntervalSet = true;
   }
 
+    setInterval(async () => {
+  try {
+    const ecoICS = await fetchCalendar(ecoflightURL);
+    const ecoEvents = parseICS(ecoICS).filter(e => labelEcoflightEvent(e.summary));
+    if (!window.events) window.events = [];
+    window.events = [...window.events.filter(e => !e._ecoflight), ...ecoEvents.map(e => ({ ...e, _ecoflight: true }))];
+    const future = window.events.filter(e => e.start > new Date());
+    displayEvents(future);
+    await updateStatus(future);
+    console.log("🔄 Ecoflight-Kalender aktualisiert");
+  } catch (err) {
+    console.warn("Fehler beim Laden von Ecoflight:", err.message);
+  }
+}, 10800000);
+
+
   try {
     const ics = await fetchCalendar(savedURL);
     const events = parseICS(ics);
@@ -886,6 +878,17 @@ if (input) input.value = savedURL;
   } catch (err) {
     console.warn("Fehler beim Laden gespeicherter URL:", err.message);
   }
+}
+try {
+  const ecoICS = await fetchCalendar(ecoflightURL);
+  const ecoEvents = parseICS(ecoICS).filter(e => labelEcoflightEvent(e.summary));
+  window.events = [...(window.events || []), ...ecoEvents.map(e => ({ ...e, _ecoflight: true }))];
+  const future = window.events.filter(e => e.start > new Date());
+  displayEvents(future);
+  await updateStatus(future);
+  console.log("✅ Ecoflight-Kalender geladen");
+} catch (err) {
+  console.warn("Fehler beim Laden von Ecoflight:", err.message);
 }
 
 });
