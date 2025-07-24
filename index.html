@@ -73,6 +73,8 @@
       margin-bottom: 0.4em;
       line-height: 1.2;
       font-size: 0.95em;
+      display: flex;
+      justify-content: space-between;
     }
     .map-box, .time-box {
       flex: 1;
@@ -400,7 +402,10 @@ function parseICS(text) {
       const flight = match[0];
       const from = await getCity(match[2]);
       const to = await getCity(match[4]);
-      div.textContent = `✈️ ${date} – ${from} → ${to} (${match[3]}–${match[5]})`;
+      const left = `✈️ <strong>${date}</strong> – ${from} → ${to}`;
+const right = `${match[3].slice(0,2)}:${match[3].slice(2)}–${match[5].slice(0,2)}:${match[5].slice(2)}`;
+div.innerHTML = `<span style="flex:1;">${left}</span><span style="white-space:nowrap;">${right}</span>`;
+
     } else {
       let icon = "📌";
 if (event._ecoflight) {
@@ -412,7 +417,16 @@ if (event._ecoflight) {
   if (/HOTEL/i.test(event.summary)) icon = "🏨";
   if (/SIM/i.test(event.summary)) icon = "🎓";
 }
-      div.innerHTML = `${icon} <strong>${date}</strong> – ${event.summary}`;
+      let startTime = "", endTime = "";
+if (event.start && event.end) {
+  startTime = event.start.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+  endTime = event.end.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+}
+const left = `${icon} <strong>${date}</strong> – ${event.summary}`;
+const right = `${startTime}–${endTime}`;
+div.innerHTML = `<span style="flex:1;">${left}</span><span style="white-space:nowrap;">${right}</span>`;
+
+
     }
 
     list.appendChild(div);
@@ -460,10 +474,11 @@ async function updateStatus(events) {
   }
 
   const parsed = events.map(ev => {
-    const match = ev.summary.match(/(LX\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
-    if (!match) return null;
-    const start = ev.start;
-    const end = ev.end || new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  const match = ev.summary.match(/(LX\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
+  const start = ev.start;
+  const end = ev.end || new Date(start.getTime() + 2 * 60 * 60 * 1000);
+
+  if (match) {
     return {
       flight: match[0],
       from: match[2],
@@ -473,15 +488,34 @@ async function updateStatus(events) {
       start,
       end
     };
-  }).filter(Boolean);
+  }
+
+  // Ecoflight-Eintrag?
+  if (ev._ecoflight) {
+    const label = labelEcoflightEvent(ev.summary);
+    if (label) {
+      return {
+        flight: label,
+        from: null,
+        to: null,
+        start,
+        end,
+        isEco: true
+      };
+    }
+  }
+
+  return null;
+}).filter(Boolean);
+
 
   const current = parsed.find(e => now >= e.start && now <= e.end);
   const next = parsed.find(e => e.start > now);
   const last = [...parsed].reverse().find(e => e.end < now);
 
   if (current) {
-  const from = await getCity(current.from);
-  const to = await getCity(current.to);
+  let from = next.from && await getCity(next.from);
+let to = next.to && await getCity(next.to);
 
   const durationMin = Math.round((current.end - current.start) / 60000);
   const elapsedMin = Math.round((now - current.start) / 60000);
@@ -518,8 +552,15 @@ const loc = isHome ? "🏠 Zuhause" : await getCity(last.to);
     showFlightRoute(next.from, next.to);
 document.getElementById("localLabel").textContent = loc;
 updateClocks();
+const isEco = next.isEco;
+const start = next.start.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+const end = next.end?.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+
 status.innerHTML = `📍 Standort: <strong>${loc}</strong><br><br>` +
-                       `✈️ <strong>Nächster Flug:</strong> ${from} → ${to}`;
+                   (isEco
+                     ? `${next.flight} (${start}–${end})`
+                     : `✈️ <strong>Nächster Flug:</strong> ${from} → ${to}`);
+
   } else if (last) {
     const to = await getCity(last.to);
     status.innerHTML = `📍 Letzter bekannter Standort: <strong>${to}</strong>`;
@@ -615,7 +656,7 @@ function updateClocks() {
 }
 
 
-    setInterval(updateClocks, 60000);
+    setInterval(updateClocks, 30000);
     updateClocks();
 
 let mapInstance;
@@ -836,12 +877,18 @@ if (input) input.value = savedURL;
     setInterval(async () => {
       if (window.calendarURL) {
         try {
-          const ics = await fetchCalendar(window.calendarURL);
-          const events = parseICS(ics);
-          const futureEvents = events.filter(e => e.start > new Date());
-          window.events = events;
-          displayEvents(futureEvents);
-          await updateStatus(events);
+          const ics = await fetchCalendar(savedURL);
+const events = parseICS(ics);
+
+// Bestehende Ecoflight-Events erhalten
+const oldEco = (window.events || []).filter(e => e._ecoflight);
+const merged = [...events, ...oldEco];
+
+const future = merged.filter(e => e.start > new Date());
+window.events = merged;
+displayEvents(future);
+await updateStatus(future);
+
           console.log("🔄 Auto-Reload nach Start");
         } catch (err) {
           console.warn("Fehler beim automatischen Reload:", err.message);
