@@ -535,10 +535,8 @@ if (flightCode) {
   const flightradarURL = `https://www.flightradar24.com/${flightCode}`;
   status.innerHTML += `<br>🔗 <a href="${flightradarURL}" target="_blank">Flug live auf Flightradar24 ansehen</a>`;
 }
+} else if (last && next) {
 
-}
-
-  else if (last && next) {
    const sameDayFlights = parsed.filter(e =>
   e.start.toDateString() === now.toDateString() &&
   e.start > now &&
