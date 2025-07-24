@@ -921,7 +921,9 @@ const ecoEvents = parseICS(ecoICS).filter(e => {
 
     if (!window.events) window.events = [];
     window.events = [...window.events.filter(e => !e._ecoflight), ...ecoEvents.map(e => ({ ...e, _ecoflight: true }))];
-    const future = window.events.filter(e => e.start > new Date());
+    const today = new Date();
+today.setHours(0, 0, 0, 0); // Setzt Uhrzeit auf 00:00:00.000
+const future = window.events.filter(e => e.start >= today);
     displayEvents(future);
     await updateStatus(future);
     console.log("🔄 Ecoflight-Kalender aktualisiert");
