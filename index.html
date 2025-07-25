@@ -944,7 +944,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         } catch (err) {
           console.warn("Fehler beim Ecoflight-Update:", err.message);
         }
-      }, 10800000);
+      }, 10800000); // ✅ Korrekt geschlossen
     }
   } catch (err) {
     console.warn("Fehler beim Laden der Kalenderdaten:", err.message);
