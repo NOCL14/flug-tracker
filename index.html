@@ -931,8 +931,9 @@ const future = window.events.filter(e => e.start >= today);
     await updateStatus(future);
     console.log("🔄 Ecoflight-Kalender aktualisiert");
   } catch (err) {
-    console.warn("Fehler beim Laden von Ecoflight:", err.message);
+     console.warn("Fehler beim Laden von Ecoflight:", err.message);
   }
+  }); // 👈 schließt async () => { ... }
 }, 10800000);
 
 
