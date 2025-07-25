@@ -922,7 +922,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   } catch (err) {
     console.warn("Fehler beim automatischen Reload:", err.message);
   }
-}, 600000);
+}, 600000); // ✅ Die Klammern stimmen jetzt
 
       setInterval(async () => {
         try {
