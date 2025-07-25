@@ -318,10 +318,13 @@ function parseICalDate(str) {
 
   // Format: 20250703T064000Z → ISO-konform UTC
   if (/^\d{8}T\d{6}Z$/.test(str)) {
-    const [_, y, m, d, h, min, s] = str.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
-return new Date(Date.UTC(+y, +m - 1, +d, +h, +min, +s));
-
+  const match = str.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+  if (match) {
+    const [_, y, m, d, h, min, s] = match;
+    return new Date(Date.UTC(+y, +m - 1, +d, +h, +min, +s));
   }
+}
+
 
   // Format: 20250703T064000 → lokal interpretieren
   if (/^\d{8}T\d{6}$/.test(str)) {
