@@ -908,7 +908,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (!window.reloadIntervalSet) {
       window.reloadIntervalSet = true;
       setInterval(async () => {
-        try {
+               try {
           const newICS = await fetchCalendar(savedURL);
           const newSwiss = parseICS(newICS).filter(e => !e._ecoflight);
           const existingEco = (window.events || []).filter(e => e._ecoflight);
@@ -919,7 +919,10 @@ window.addEventListener("DOMContentLoaded", async () => {
           displayEvents(upcoming);
           await updateStatus(upcoming);
           console.log("🔄 Auto-Reload");
-          }
+        } catch (err) {
+          console.warn("Fehler beim automatischen Reload:", err.message);
+        }
+
         } catch (err) {
           console.warn("Fehler beim automatischen Reload:", err.message);
         }
