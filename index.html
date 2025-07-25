@@ -971,9 +971,10 @@ const ecoEvents = parseICS(ecoICS).filter(e => {
   await updateStatus(future);
   console.log("✅ Ecoflight-Kalender geladen");
 } catch (err) {
-  console.warn("Fehler beim Laden von Ecoflight:", err.message);
+   console.warn("Fehler beim Laden von Ecoflight:", err.message);
 }
-       
+}, 10800000); // ❗ Jetzt ist setInterval korrekt geschlossen
+
 }); // Ende DOMContentLoaded Funktion
 </script>
 
