@@ -904,17 +904,18 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     console.log("✅ Kalenderdaten geladen");
 
- // Automatische Reloads
+// Automatische Reloads
 if (!window.reloadIntervalSet) {
   window.reloadIntervalSet = true;
 
-  // Reload Swiss (alle 10 Minuten)
-  setInterval(async () => {
+  // Swiss alle 10 Minuten nachladen
+  async function reloadSwiss() {
     try {
-      const newICS = await fetchCalendar(savedURL);
+      const newICS   = await fetchCalendar(savedURL);
       const newSwiss = parseICS(newICS).filter(e => !e._ecoflight);
       const existingEco = (window.events || []).filter(e => e._ecoflight);
-      const merged = [...newSwiss, ...existingEco];
+
+      const merged   = [...newSwiss, ...existingEco];
       const upcoming = merged.filter(e => e.start > new Date());
 
       window.events = merged;
@@ -924,20 +925,27 @@ if (!window.reloadIntervalSet) {
     } catch (err) {
       console.warn("Fehler beim automatischen Reload:", err.message);
     }
-  }, 600000);
+  }
 
-  // Reload Ecoflight (alle 3 Stunden)
-  setInterval(async () => {
+  // Ecoflight alle 3 Stunden nachladen
+  async function reloadEco() {
     try {
+      // Fenster dynamisch neu berechnen
+      const now = new Date();
+      const startLimit = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      const endLimit   = new Date(now.getFullYear(), now.getMonth() + 4, 0);
+
       const newEcoICS = await fetchCalendar(ecoflightURL);
-      const ecoNew = parseICS(newEcoICS).filter(e =>
-        labelEcoflightEvent(e.summary) &&
-        e.start >= startLimit &&
-        e.start <= endLimit
-      ).map(e => ({ ...e, _ecoflight: true }));
+      const ecoNew = parseICS(newEcoICS)
+        .filter(e =>
+          labelEcoflightEvent(e.summary) &&
+          e.start >= startLimit &&
+          e.start <= endLimit
+        )
+        .map(e => ({ ...e, _ecoflight: true }));
 
       const existingSwiss = (window.events || []).filter(e => !e._ecoflight);
-      const all = [...existingSwiss, ...ecoNew];
+      const all      = [...existingSwiss, ...ecoNew];
       const upcoming = all.filter(e => e.start > new Date());
 
       window.events = all;
@@ -947,7 +955,11 @@ if (!window.reloadIntervalSet) {
     } catch (err) {
       console.warn("Fehler beim Ecoflight-Update:", err.message);
     }
-  }, 10800000);
+  }
+
+  // Timer starten
+  setInterval(reloadSwiss, 600000);     // 10 Minuten
+  setInterval(reloadEco,   10800000);   // 3 Stunden
 }
 
   } catch (err) {
