@@ -904,50 +904,52 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     console.log("✅ Kalenderdaten geladen");
 
-    // Automatische Reloads
-    if (!window.reloadIntervalSet) {
-      window.reloadIntervalSet = true;
-      setInterval(async () => {
- setInterval(async () => {
-  try {
-    const newICS = await fetchCalendar(savedURL);
-    const newSwiss = parseICS(newICS).filter(e => !e._ecoflight);
-    const existingEco = (window.events || []).filter(e => e._ecoflight);
-    const merged = [...newSwiss, ...existingEco];
-    const upcoming = merged.filter(e => e.start > new Date());
+ // Automatische Reloads
+if (!window.reloadIntervalSet) {
+  window.reloadIntervalSet = true;
 
-    window.events = merged;
-    displayEvents(upcoming);
-    await updateStatus(upcoming);
-    console.log("🔄 Auto-Reload");
-  } catch (err) {
-    console.warn("Fehler beim automatischen Reload:", err.message);
-  }
-}, 600000); // ✅ Alles korrekt geschlossen
+  // Reload Swiss (alle 10 Minuten)
+  setInterval(async () => {
+    try {
+      const newICS = await fetchCalendar(savedURL);
+      const newSwiss = parseICS(newICS).filter(e => !e._ecoflight);
+      const existingEco = (window.events || []).filter(e => e._ecoflight);
+      const merged = [...newSwiss, ...existingEco];
+      const upcoming = merged.filter(e => e.start > new Date());
 
-
-      setInterval(async () => {
-        try {
-          const newEcoICS = await fetchCalendar(ecoflightURL);
-          const ecoNew = parseICS(newEcoICS).filter(e =>
-            labelEcoflightEvent(e.summary) &&
-            e.start >= startLimit &&
-            e.start <= endLimit
-          ).map(e => ({ ...e, _ecoflight: true }));
-
-          const existingSwiss = (window.events || []).filter(e => !e._ecoflight);
-          const all = [...existingSwiss, ...ecoNew];
-          const upcoming = all.filter(e => e.start > new Date());
-
-          window.events = all;
-          displayEvents(upcoming);
-          await updateStatus(upcoming);
-          console.log("🔄 Ecoflight aktualisiert");
-        } catch (err) {
-          console.warn("Fehler beim Ecoflight-Update:", err.message);
-        }
-      }, 10800000); // ✅ Korrekt geschlossen
+      window.events = merged;
+      displayEvents(upcoming);
+      await updateStatus(upcoming);
+      console.log("🔄 Auto-Reload");
+    } catch (err) {
+      console.warn("Fehler beim automatischen Reload:", err.message);
     }
+  }, 600000);
+
+  // Reload Ecoflight (alle 3 Stunden)
+  setInterval(async () => {
+    try {
+      const newEcoICS = await fetchCalendar(ecoflightURL);
+      const ecoNew = parseICS(newEcoICS).filter(e =>
+        labelEcoflightEvent(e.summary) &&
+        e.start >= startLimit &&
+        e.start <= endLimit
+      ).map(e => ({ ...e, _ecoflight: true }));
+
+      const existingSwiss = (window.events || []).filter(e => !e._ecoflight);
+      const all = [...existingSwiss, ...ecoNew];
+      const upcoming = all.filter(e => e.start > new Date());
+
+      window.events = all;
+      displayEvents(upcoming);
+      await updateStatus(upcoming);
+      console.log("🔄 Ecoflight aktualisiert");
+    } catch (err) {
+      console.warn("Fehler beim Ecoflight-Update:", err.message);
+    }
+  }, 10800000);
+}
+
   } catch (err) {
     console.warn("Fehler beim Laden der Kalenderdaten:", err.message);
   }
