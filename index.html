@@ -585,6 +585,7 @@ status.innerHTML = `📍 Standort: <strong>${loc}</strong><br><br>` +
   } else if (next) {
     const from = await getCity(next.from);
     const to = await getCity(next.to);
+    showFlightRoute(next.from, next.to);
     status.innerHTML = `✈️ <strong>Nächster Flug:</strong> ${from} ${next.dep} → ${to} ${next.arr}`;
   } else {
     status.innerHTML = "📍 Keine Flugdaten gefunden.";
@@ -907,8 +908,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     const future = allEvents.filter(e => e.start > new Date());
 
     window.events = allEvents;
-    displayEvents(future);
-    await updateStatus(future);
+const futureSorted = [...future].sort((a, b) => a.start - b.start);
+displayEvents(futureSorted);
+await updateStatus(allEvents);
+
 
     console.log("✅ Kalenderdaten geladen");
 
@@ -927,8 +930,9 @@ if (!window.reloadIntervalSet) {
       const upcoming = merged.filter(e => e.start > new Date());
 
       window.events = merged;
-      displayEvents(upcoming);
-      await updateStatus(upcoming);
+      const upcomingSorted = [...upcoming].sort((a, b) => a.start - b.start);
+      displayEvents(upcomingSorted);
+      await updateStatus(merged);
       console.log("🔄 Auto-Reload");
     } catch (err) {
       console.warn("Fehler beim automatischen Reload:", err.message);
@@ -957,8 +961,10 @@ if (!window.reloadIntervalSet) {
       const upcoming = all.filter(e => e.start > new Date());
 
       window.events = all;
-      displayEvents(upcoming);
-      await updateStatus(upcoming);
+      const upcomingSorted = [...upcoming].sort((a, b) => a.start - b.start);
+      displayEvents(upcomingSorted);
+      await updateStatus(all);
+
       console.log("🔄 Ecoflight aktualisiert");
     } catch (err) {
       console.warn("Fehler beim Ecoflight-Update:", err.message);
