@@ -411,10 +411,9 @@ container.innerHTML = "";
       const right = `${match[3].slice(0,2)}:${match[3].slice(2)}–${match[5].slice(0,2)}:${match[5].slice(2)}`;
       div.innerHTML = `<span style="flex:1;">${left}</span><span style="white-space:nowrap;">${right}</span>`;
     } else if (event._ecoflight && labelEcoflightEvent(event.summary)) {
-  const label = labelEcoflightEvent(event.summary);
-  // Icon aus dem Label ziehen, Text ohne Icon für saubere Formatierung
+  const label = labelEcoflightEvent(event.summary);       // "🛩️ Flugschule" | "📘 Theorieunterricht"
   const icon = label.startsWith("🛩️") ? "🛩️" : "📘";
-  const labelText = label.replace(/^🛩️\s*|^📘\s*/, "");
+  const labelText = label.replace(/^🛩️\s*|^📘\s*/, "");   // nur der Text ohne Emoji
 
   let startTime = "", endTime = "";
   if (event.start && event.end) {
@@ -422,6 +421,7 @@ container.innerHTML = "";
     endTime = event.end.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
   }
 
+  // Datum vorne – identisches Schema wie bei Swiss
   const left = `${icon} <strong>${date}</strong> – ${labelText}`;
   const right = `${startTime}–${endTime}`;
   div.innerHTML = `<span style="flex:1;">${left}</span><span style="white-space:nowrap;">${right}</span>`;
