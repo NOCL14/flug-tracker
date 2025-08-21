@@ -375,9 +375,11 @@ function parseICS(text) {
 
 
 
-async function displayEvents(events) {
-  const list = document.getElementById("eventList");
-  list.innerHTML = "";
+async function displayEvents(events) {  
+const container = document.getElementById("eventList");
+if (!container) { console.error("eventList element not found"); return; }
+container.innerHTML = "";
+
 
   let airportData = null;
   async function getCity(iata) {
@@ -440,7 +442,8 @@ async function displayEvents(events) {
     }
 
     // WICHTIG: Anhängen muss innerhalb der Schleife passieren
-    list.appendChild(div);
+    container.appendChild(div);
+
   }
 }
 
