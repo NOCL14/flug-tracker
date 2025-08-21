@@ -403,7 +403,7 @@ container.innerHTML = "";
     const div = document.createElement("div");
     div.className = "flight-entry";
 
-    const match = event.summary.match(/(LX\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
+    const match = event.summary.match(/([A-Z]{2}\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
     if (match) {
       const from = await getCity(match[2]);
       const to = await getCity(match[4]);
@@ -491,7 +491,7 @@ async function updateStatus(events) {
   }
 
   const parsed = events.map(ev => {
-  const match = ev.summary.match(/(LX\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
+  const match = ev.summary.match(/([A-Z]{2}\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
   const start = ev.start;
   const end = ev.end || new Date(start.getTime() + 2 * 60 * 60 * 1000);
 
@@ -682,6 +682,8 @@ let mapInstance;
 let mapLine;
 let fromMarker;
 let toMarker;
+let pendingRoute = null; // [fromIATA, toIATA], falls Map noch nicht bereit
+
 
 
 async function getAirportCoords(iata) {
@@ -719,26 +721,30 @@ function computeBearing(from, to) {
 }
 
 async function showFlightRoute(fromIATA, toIATA) {
-  const fromCoords = await getAirportCoords(fromIATA);
-  const toCoords = await getAirportCoords(toIATA);
-
-  if (fromCoords && toCoords && mapInstance) {
-    // Alte Linien/Marker entfernen
-    if (mapLine) mapInstance.removeLayer(mapLine);
-    if (fromMarker) mapInstance.removeLayer(fromMarker);
-    if (toMarker) mapInstance.removeLayer(toMarker);
-
-    // Linie zeichnen
-    mapLine = L.polyline([fromCoords, toCoords], { color: 'blue', weight: 3 }).addTo(mapInstance);
-
-    // IATA-Code-Marker
-    fromMarker = L.marker(fromCoords).addTo(mapInstance).bindTooltip(fromIATA, { permanent: true, direction: 'right' });
-    toMarker = L.marker(toCoords).addTo(mapInstance).bindTooltip(toIATA, { permanent: true, direction: 'left' });
-    
-    // Karte auf Linie zoomen
-    mapInstance.fitBounds(mapLine.getBounds(), { padding: [30, 30] });
+  // Map noch nicht bereit? -> Route merken und später zeichnen
+  if (!mapInstance) { 
+    pendingRoute = [fromIATA, toIATA];
+    return;
   }
+
+  const fromCoords = await getAirportCoords(fromIATA);
+  const toCoords   = await getAirportCoords(toIATA);
+  if (!fromCoords || !toCoords) return;
+
+  // Alte Elemente entfernen
+  if (mapLine)     mapInstance.removeLayer(mapLine);
+  if (fromMarker)  mapInstance.removeLayer(fromMarker);
+  if (toMarker)    mapInstance.removeLayer(toMarker);
+
+  // Linie + Marker
+  mapLine    = L.polyline([fromCoords, toCoords], { color: 'blue' , weight: 3 }).addTo(mapInstance);
+  fromMarker = L.marker(fromCoords).addTo(mapInstance).bindTooltip(fromIATA, { permanent: true, direction: 'right' });
+  toMarker   = L.marker(toCoords).addTo(mapInstance).bindTooltip(toIATA,   { permanent: true, direction: 'left' });
+
+  // Zoomen
+  mapInstance.fitBounds(mapLine.getBounds(), { padding: [30, 30] });
 }
+
 
 
 navigator.geolocation?.getCurrentPosition(position => {
@@ -747,12 +753,23 @@ navigator.geolocation?.getCurrentPosition(position => {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(mapInstance);
+    // Falls eine Route schon angefragt wurde, jetzt zeichnen
+  if (pendingRoute) {
+    const [a, b] = pendingRoute;
+    pendingRoute = null;
+    showFlightRoute(a, b);
+  }
 }, () => {
   // Fallback auf Schweiz-Karte, z.B. Bern
   mapInstance = L.map('map').setView([46.9481, 7.4474], 5);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(mapInstance);
+  if (pendingRoute) {
+    const [a, b] = pendingRoute;
+    pendingRoute = null;
+    showFlightRoute(a, b);
+  }
 });
 
     document.getElementById("eventList").addEventListener("click", openCalendarPopup);
