@@ -885,15 +885,35 @@ cell.addEventListener("mouseover", async () => {
   }
 
   const entries = await Promise.all(dayEvents.map(async (e) => {
-    const match = e.summary.match(/(LX\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
-    if (match) {
-      const from = await getCity(match[2]);
-      const to = await getCity(match[4]);
-      return `✈️ <strong>${match[1]}</strong>: ${from} → ${to} (${match[3]}–${match[5]})`;
-    } else {
-      return `• ${e.summary}`;
-    }
-  }));
+  // Linienflüge (z. B. LX / WK) – inkl. Zeiten
+  const flight = e.summary.match(/([A-Z]{2}\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
+  if (flight) {
+    const from = await getCity(flight[2]);
+    const to   = await getCity(flight[4]);
+    const dep  = `${flight[3].slice(0,2)}:${flight[3].slice(2)}`;
+    const arr  = `${flight[5].slice(0,2)}:${flight[5].slice(2)}`;
+    return `✈️ <strong>${flight[1]}</strong>: ${from} → ${to} (${dep}–${arr})`;
+  }
+
+  // Ecoflight (Flugschule / Theorie) – Zeiten aus e.start/e.end anzeigen
+  if (e._ecoflight) {
+    const label = labelEcoflightEvent(e.summary) || "🛩️ Flugschule";
+    const start = e.start ? e.start.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" }) : "";
+    const end   = e.end   ? e.end.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })   : "";
+    const time  = (start && end) ? ` (${start}–${end})` : "";
+    return `${label}${time}`;
+  }
+
+  // Andere Events – wenn möglich auch mit Zeit
+  if (e.start && e.end) {
+    const start = e.start.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+    const end   = e.end  .toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+    return `• ${e.summary} (${start}–${end})`;
+  }
+
+  return `• ${e.summary}`;
+}));
+
 
   preview.innerHTML = entries.join("<br>");
 });
