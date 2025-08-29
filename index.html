@@ -445,7 +445,7 @@ async function displayEvents(events) {
     return airportData.get(iata) || iata;
   }
 
-  for (const event of overview.slice(0, 10)) {
+  for (const event of overview.slice(0, 30)) {
     const date = event.start.toLocaleDateString("de-CH", { day: '2-digit', month: '2-digit' });
     const div = document.createElement("div");
     div.className = "flight-entry";
