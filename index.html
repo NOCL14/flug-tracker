@@ -451,16 +451,28 @@ async function displayEvents(events) {
     div.className = "flight-entry";
 
     // 1) Nightstop-Einträge
-    if (event._nightstop) {
-      const city = await getCity(event.iata);
-      const startTime = event.start.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
-      const endTime   = event.end   ? event.end  .toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" }) : "";
-      const left  = `🏨 <strong>${date}</strong> – Nightstop ${city}`;
-      const right = `${startTime}–${endTime}`;
-      div.innerHTML = `<span style="flex:1;">${left}</span><span style="white-space:nowrap;">${right}</span>`;
-      container.appendChild(div);
-      continue;
-    }
+if (event._nightstop) {
+  const city = await getCity(event.iata);
+
+  // Datum von–bis (z.B. 12.09–13.09). Bei gleichem Tag wird nur einmal gezeigt.
+  const fmtDate = d => d.toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit" });
+  const startDate = fmtDate(event.start);
+  const endDate   = event.end ? fmtDate(event.end) : startDate;
+  const dateRange = (endDate === startDate) ? startDate : `${startDate}–${endDate}`;
+
+  // Zeiten
+  const startTime = event.start.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+  const endTime   = event.end   ? event.end  .toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" }) : "";
+
+  // Ganzer Text fett
+  const left  = `🏨 <strong>${dateRange} – Nightstop ${city}</strong>`;
+  const right = `<strong>${startTime}${endTime ? "–" + endTime : ""}</strong>`;
+
+  div.innerHTML = `<span style="flex:1;">${left}</span><span style="white-space:nowrap;">${right}</span>`;
+  container.appendChild(div);
+  continue;
+}
+
 
     // 2) Linienflüge (LX/WK/…)
     const match = event.summary.match(/([A-Z]{2}\d+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})/);
